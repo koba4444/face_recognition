@@ -250,13 +250,17 @@ def extract_face(dirname,root,filename):
 
             face_locations = face_recognition.face_locations((face_img))
 
-            print(f"found {len(face_locations)} faces in image {root}/{filename} turned by {(turn+1)*90}")
+
             if len(face_locations) == 0:
                 if not os.path.exists(dirname + "/turned"):
                     os.makedirs(dirname + "/turned")
-                Image.fromarray(face_img).rotate(90*(turn+1)).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
-                face_img = face_recognition.load_image_file(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
+                #Image.fromarray(face_img).rotate(90*(turn+1)).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
+                #face_img = face_recognition.load_image_file(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
+                face_img = Image.fromarray(face_img).rotate(90)
+                print(f"No faces in image {root}/{filename} turned by {(turn) * 90}")
                 continue
+
+            print(f"found {len(face_locations)} faces in image {root}/{filename} turned by {(turn) * 90}")
             count = 1
             for (top, right, bottom, left) in face_locations:
                 f_im = face_img[top:bottom, left:right]
