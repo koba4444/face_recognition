@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 import hashlib
 import exifread
 import time
+import numpy as np
 
 def convert_tags_to_json_serializable(tags):
     tags_json_serializable = {}
@@ -246,7 +247,7 @@ def extract_face(dirname,root,filename):
     answer = []
     try:
         face_img = face_recognition.load_image_file(root + "/" + filename)
-        for turn in range(3):
+        for turn in range(4):
 
             face_locations = face_recognition.face_locations((face_img))
 
@@ -254,9 +255,11 @@ def extract_face(dirname,root,filename):
             if len(face_locations) == 0:
                 if not os.path.exists(dirname + "/turned"):
                     os.makedirs(dirname + "/turned")
-                #Image.fromarray(face_img).rotate(90*(turn+1)).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
+
+                #Image.fromarray(face_img).rotate(90).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
+                #i = np.asarray(Image.fromarray(face_img).rotate(90))
                 #face_img = face_recognition.load_image_file(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
-                face_img = Image.fromarray(face_img).rotate(90)
+                face_img = np.asarray(Image.fromarray(face_img).rotate(90))
                 print(f"No faces in image {root}/{filename} turned by {(turn) * 90}")
                 continue
 
