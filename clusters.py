@@ -135,12 +135,18 @@ def collect_vectors():
     csv_file = "./csv_index.csv"
 
     # Prepare your data
-    header = ['Name', 'Age', 'City']
-    data = [
-        ['Alice', 30, 'New York'],
-        ['Bob', 25, 'San Francisco'],
-        ['Charlie', 22, 'Los Angeles'],
-    ]
+
+
+    with open(csv_file, mode='r+', newline='', encoding='utf-8') as file:
+        try:
+            csv_reader = csv.DictReader(file, delimiter=";")
+            list_of_dicts = [row for row in csv_reader]
+        except:
+            print("csv file is empty. It will be created")
+            list_of_dicts = []
+
+    header = ['Face_hash', 'Face_path', 'Face_encoding', 'Image_hash', 'Image_path', 'date_taken', 'geotag']
+    data = []
 
 
 
@@ -154,9 +160,7 @@ def collect_vectors():
         csv_writer.writerows(data)
 
 
-    with open(csv_file, mode='r+', newline='', encoding='utf-8') as file:
-        csv_reader = csv.DictReader(file, delimiter=";")
-        list_of_dicts = [row for row in csv_reader]
+
 
     print(list_of_dicts)
 
@@ -168,9 +172,7 @@ def collect_vectors():
             if filename.lower().split(".")[-1] != "jpg":
                 continue
             hash_value = hash_file(root +"/"+ filename)
-            if "all" in index.keys() and "files" in index["all"].keys() and hash_value in index["all"]["files"].keys():
-                print(f"File with Hash : {hash_value} explored earlier.")
-                continue
+            exif_data = get_exif_data(root + "/" + filename)
             print(f"Hash : {hash_value}")
             print(f"Exploring file : {root}/{filename}")
             files_size += os.path.getsize(root +"/"+ filename)
@@ -182,8 +184,6 @@ def collect_vectors():
 
                 print(f"Time passed: {time_passed} === {end_time} - {start_time}")
                 print(f" Average time: {time_passed / files_number} sec per image,  {1000000 * time_passed / files_size} sec per MB")
-                print(f" Average time: {time_passed / (files_number * examples_number)} sec per image * example,"
-                      f"  {time_passed / (files_number * persons_number)} sec per image * example")
                 with open("./persons/statistics_", 'a') as stat:
                     stat.write(
                         str(files_number)+
@@ -194,13 +194,10 @@ def collect_vectors():
                         ";"+
                         str(time_passed / files_size)+
                         ";"+
-                        str(time_passed / (files_number * examples_number))+
-                        ";"+
-                        str(time_passed / (files_number * persons_number))+
                         "\n"
                         )
 
-            # insert file data into "all" entry
+            """insert file data into "all" entry
             #=========================================================================
             name = "all"
             if name not in index.keys():
@@ -222,40 +219,41 @@ def collect_vectors():
             else:
                 index[name]["files"][hash_value]["paths"].append(root + "/" + filename)
             #=========================================================================
+            """
 
             extracted_faces = extract_face(dirname,root, filename)
 #            mark_face(root, filename)
-            if not extracted_faces: continue
+            if not extracted_faces:
+                print(f"no faces in {filename}")
+                continue
             for e_face in extracted_faces:
-                for name  in ex_encodings.keys():
 
-                    c_faces = compare_faces(ex_encodings[name], e_face)
-                    if c_faces and sum(c_faces) / len(c_faces) > 0.5:
-                        if name not in index.keys():
-                            index[name] = {}
-                        if "files" not in index[name].keys():
-                            index[name]["files"] = {}
-                        index[name]["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                        if hash_value not in index[name]["files"].keys():
-                            index[name]["files"][hash_value] = {}
-                            index[name]["files"][hash_value]["paths"] = [root +"/"+ filename]
-                            exif_data = get_exif_data(root + "/" + filename)
-                            index[name]["files"][hash_value]["exif"] = convert_tags_to_json_serializable(exif_data)
-                            if "JPEGThumbnail" in index[name]["files"][hash_value]["exif"].keys():
-                                del index[name]["files"][hash_value]["exif"]["JPEGThumbnail"]
-                            index[name]["files"][hash_value]["date_taken"] = get_date_taken(exif_data)
-                            gt = get_geotagging(exif_data)
-                            index[name]["files"][hash_value]["geotag"] = gt if gt else [0., 0.]
-                        else:
-                            index[name]["files"][hash_value]["paths"].append(root + "/" + filename)
-            with open("./persons/fc_index.json", 'w') as file:
-                json.dump(index, file)
+                eface_dict = {}
+                eface_dict["Face_hash"] = hash_file(root +"/"+ filename)
+                eface_dict["Face_path"] = e_face[0]
+                eface_dict["Face_encoding"] = e_face[1]
+                eface_dict["Image_hash"] = hash_value
+                eface_dict["Image_path"] = root +"/"+ filename
+                eface_dict["date_taken"] = get_date_taken(exif_data)
+                eface_dict["geotag"] = get_geotagging(exif_data)
+                list_of_dicts.append(eface_dict)
 
 
 
+    """
+    write list_of_dicts into csv
+    """
+    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+        csv_writer = csv.writer(file, delimiter=";")
+
+        # Write the header row
+        csv_writer.writerow(header)
+
+        # Write the data rows
+        csv_writer.writerows(list_of_dicts)
     end_time = time.time()
     print(f"Duration = {-(start_time - end_time)} sec")
+    return csv_file
 
 def extract_face(dirname,root,filename):
     answer = []
@@ -285,7 +283,10 @@ def extract_face(dirname,root,filename):
                 if not os.path.exists(dirname + "/tmp"):
                     os.makedirs(dirname + "/tmp")
                 pil_img.save(dirname + "/tmp" +f"/{count}_" + filename)
-                answer.append(dirname + "/tmp" +f"/{count}_" + filename)
+                face_encoding = face_recognition.face_encodings(np.asarray(pil_img))[0]
+                    #face_recognition.load_image_file(root + "/" + filename))
+                answer.append([dirname + "/tmp" +f"/{count}_" + filename, face_encoding])
+
                 count += 1
             break
         return answer
@@ -301,36 +302,14 @@ def compare_faces(example_encodings, img2_path):
     else:
         result = [False]
     return result
-def mark_face(dirname,root, filename):
-    try:
-        face_img = face_recognition.load_image_file(root + "/" + filename)
-        for turn in range(3):
 
-            face_locations = face_recognition.face_locations((face_img))
-
-            print(f"found {len(face_locations)} faces in image {filename}")
-            if len(face_locations) == 0:
-                if not os.path.exists(dirname + "/turned"):
-                    os.makedirs(dirname + "/turned")
-                Image.fromarray(face_img).rotate(90*(turn+1)).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
-                face_img = face_recognition.load_image_file(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
-                continue
-            pil_img = Image.fromarray(face_img)
-            draw = ImageDraw.Draw(pil_img)
-            for (top, right, bottom, left) in face_locations:
-                draw.rectangle(((left, top),(right, bottom)), outline=(255, 255, 0), width=5 )
-            del draw
-            if not os.path.exists(dirname + "/marked"):
-                os.makedirs(dirname + "/marked")
-            pil_img.save(dirname + "/marked/marked_" + filename)
-            break
-    except:
-        print(Exception())
-
+def clus
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    collect_vectors()
+    csv_file = collect_vectors()
+    clusters = clusterize(csv_file)
+
 
 
 
