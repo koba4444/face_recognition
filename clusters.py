@@ -1,4 +1,5 @@
 import json
+import shutil
 from datetime import datetime
 import face_recognition
 import os
@@ -8,6 +9,10 @@ import exifread
 import time
 import numpy as np
 import csv
+import pandas as pd
+from sklearn.cluster import KMeans, DBSCAN, Birch, OPTICS, AgglomerativeClustering, SpectralClustering, MeanShift, AffinityPropagation
+
+
 
 def convert_tags_to_json_serializable(tags):
     tags_json_serializable = {}
@@ -126,38 +131,33 @@ def collect_vectors():
     :return:
     """
 
+
     dirname = input("enter name of directory with images:")
     start_time = time.time()
     files_number = 0
     files_size = 0
+    faces_number = 0
     #ex_encodings = construct_encodings_of_examples(path)
 
     csv_file = "./csv_index.csv"
 
     # Prepare your data
 
+    try:
+        file = open(csv_file, mode='r+', newline='', encoding='utf-8')
+        csv_reader = csv.DictReader(file, delimiter=";")
+        list_of_dicts = [row for row in csv_reader]
+        file.close()
+    except:
+        print("csv file is empty. It will be created")
+        list_of_dicts = []
 
-    with open(csv_file, mode='r+', newline='', encoding='utf-8') as file:
-        try:
-            csv_reader = csv.DictReader(file, delimiter=";")
-            list_of_dicts = [row for row in csv_reader]
-        except:
-            print("csv file is empty. It will be created")
-            list_of_dicts = []
-
-    header = ['Face_hash', 'Face_path', 'Face_encoding', 'Image_hash', 'Image_path', 'date_taken', 'geotag']
-    data = []
+        header = ['Face_hash', 'Face_path', 'Face_encoding', 'Image_hash', 'Image_path', 'date_taken', 'geotag']
+        data = []
 
 
 
-    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
-        csv_writer = csv.writer(file, delimiter=";")
 
-        # Write the header row
-        csv_writer.writerow(header)
-
-        # Write the data rows
-        csv_writer.writerows(data)
 
 
 
@@ -197,29 +197,6 @@ def collect_vectors():
                         "\n"
                         )
 
-            """insert file data into "all" entry
-            #=========================================================================
-            name = "all"
-            if name not in index.keys():
-                index[name] = {}
-            if "files" not in index[name].keys():
-                index[name]["files"] = {}
-            index[name]["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            if hash_value not in index[name]["files"].keys():
-                index[name]["files"][hash_value] = {}
-                index[name]["files"][hash_value]["paths"] = [root + "/" + filename]
-                exif_data = get_exif_data(root + "/" + filename)
-                index[name]["files"][hash_value]["exif"] = convert_tags_to_json_serializable(exif_data)
-                if "JPEGThumbnail" in index[name]["files"][hash_value]["exif"].keys():
-                    del index[name]["files"][hash_value]["exif"]["JPEGThumbnail"]
-                index[name]["files"][hash_value]["date_taken"] = get_date_taken(exif_data)
-                gt = get_geotagging(exif_data)
-                index[name]["files"][hash_value]["geotag"] = gt if gt else [0., 0.]
-            else:
-                index[name]["files"][hash_value]["paths"].append(root + "/" + filename)
-            #=========================================================================
-            """
 
             extracted_faces = extract_face(dirname,root, filename)
 #            mark_face(root, filename)
@@ -237,12 +214,15 @@ def collect_vectors():
                 eface_dict["date_taken"] = get_date_taken(exif_data)
                 eface_dict["geotag"] = get_geotagging(exif_data)
                 list_of_dicts.append(eface_dict)
+                faces_number += 1
+                print(f"Faces found in total: {faces_number}")
+                print(f"Length of list_of_dicts: {len(list_of_dicts)}")
 
 
 
     """
     write list_of_dicts into csv
-    """
+
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
         csv_writer = csv.writer(file, delimiter=";")
 
@@ -251,9 +231,11 @@ def collect_vectors():
 
         # Write the data rows
         csv_writer.writerows(list_of_dicts)
+    """
     end_time = time.time()
     print(f"Duration = {-(start_time - end_time)} sec")
-    return csv_file
+    print(f"faces recorded = {faces_number}")
+    return list_of_dicts
 
 def extract_face(dirname,root,filename):
     answer = []
@@ -265,8 +247,6 @@ def extract_face(dirname,root,filename):
 
 
             if len(face_locations) == 0:
-                if not os.path.exists(dirname + "/turned"):
-                    os.makedirs(dirname + "/turned")
 
                 #Image.fromarray(face_img).rotate(90).save(dirname + "/turned/" + f"turn_{(turn+1)*90}_" + filename)
                 #i = np.asarray(Image.fromarray(face_img).rotate(90))
@@ -276,7 +256,7 @@ def extract_face(dirname,root,filename):
                 continue
 
             print(f"found {len(face_locations)} faces in image {root}/{filename} turned by {(turn) * 90}")
-            count = 1
+            count = 0
             for (top, right, bottom, left) in face_locations:
                 f_im = face_img[top:bottom, left:right]
                 pil_img = Image.fromarray(f_im)
@@ -291,7 +271,9 @@ def extract_face(dirname,root,filename):
             break
         return answer
     except:
-        print(Exception())
+        print(f"exception in extract_face() with {filename}")
+        print(f"added only {count} faces of {len(face_locations)} founded")
+        if answer: return answer
 def compare_faces(example_encodings, img2_path):
 
     img2 = face_recognition.load_image_file(img2_path)
@@ -303,16 +285,70 @@ def compare_faces(example_encodings, img2_path):
         result = [False]
     return result
 
-def clus
+def clusterize(list_of_dicts):
+    """
+    Using pandas clusterize list_of_dicts['Face_encoding'] into clusters.
+    Use method of KMeans. Number of clusters is 10.
+    Use method DBSCAN. Number of clusters is 10.
+    :param list_of_dicts:
+    :return:
+    """
+    df = pd.DataFrame(list_of_dicts)
+    #df = df.drop(['Image_path','Image_hash','date_taken','geotag'], axis=1)
 
-# Press the green button in the gutter to run the script.
+    print(df)
+    X = np.array(df['Face_encoding'].tolist())
+    kmeans = KMeans(n_clusters=10, random_state=0).fit(X)
+    dbscan = DBSCAN(eps=0.3, min_samples=5).fit(X)
+    aff = AffinityPropagation(random_state=0).fit(X)
+    mean_shift = MeanShift().fit(X)
+    spec_clust = SpectralClustering(n_clusters=10).fit(X)
+    agglo = AgglomerativeClustering(n_clusters=10).fit(X)
+    optics = OPTICS(min_samples=5).fit(X)
+    birch = Birch(n_clusters=10).fit(X)
+    df['cluster_birch'] = birch.labels_
+    df['cluster_optics'] = optics.labels_
+    df['cluster_agglo'] = agglo.labels_
+    df['cluster_spec_clust'] = spec_clust.labels_
+    df['cluster_mean_shift'] = mean_shift.labels_
+    df['cluster_aff'] = aff.labels_
+    df['cluster_kmeans'] = kmeans.labels_
+    df['cluster_DBSCAN'] = dbscan.labels_
+    df = df.drop(['Face_encoding'], axis=1)
+    print(df)
+    df.to_csv("clusters.csv", sep=";")
+    return df
+
+
+def create_subdirectories_for_clusters(clusters):
+    for index, cl in clusters.iterrows():
+        face_file = cl['Face_path']
+        face_dir = os.path.dirname(face_file)
+        face_filename = os.path.basename(face_file)
+        for cluster_method in [
+            'cluster_birch',
+            'cluster_optics',
+            'cluster_agglo',
+            'cluster_spec_clust',
+            'cluster_mean_shift',
+            'cluster_aff',
+            'cluster_kmeans',
+            'cluster_DBSCAN']:
+            face_cluster_method_path = face_dir + "/" +cluster_method + "/" + str(cl[cluster_method])
+            if not os.path.exists(face_cluster_method_path):
+                os.makedirs(face_cluster_method_path)
+            shutil.copy(face_file, face_cluster_method_path + "/" + face_filename)
+
+
+
 if __name__ == '__main__':
-    csv_file = collect_vectors()
-    clusters = clusterize(csv_file)
+    list_of_dicts = collect_vectors()
+    clusters = clusterize(list_of_dicts)
+    create_subdirectories_for_clusters(clusters)
+    print(f"result was saved in clusters.csv")
 
 
 
 
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
-# where from
+
