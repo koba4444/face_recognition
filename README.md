@@ -9,19 +9,19 @@ Here is a solution.
 - 4. Saves clusterized faces in separate directories (*/dir/tmp/method/cluster_number*)
 - 5. Results a saved in clusters.csv file including information about clusterization including images paths, faces and initial images hashes.
 - 6. Result can be used afterward for:
-   - 6.1. finding images with specific person;
-   - 6.2. indexing and tagging images by predefined persons;
-   - 6.3. finding similar images;
+   - finding images with specific person;
+   - indexing and tagging images by predefined persons;
+   - finding similar images;
 - 7. To run the script you need to run the following command in terminal:
     ***sudo apt-get install libboost-all-dev libgtk-3-dev build-essential cmake
     pip install face-recognition***
 - 8. Run file clusters.py
 
 
-You can check results for some group photos of G20 leaders in dir ./stock/tmp
+You can check results for some group photos of G20 leaders in dir *./stock/tmp*
 
 Looks like AffinityPropagation method gives the best result given that number of cluster is not known apriori.
 
-cluster.csv contains data for 389 faces found: paths to original photos and its hash256. 
+File *cluster.csv* contains data for 389 faces found: paths to original photos and its hash256. 
 
 That allows to seek indexed photo by their hashes anywhere in different stores.
