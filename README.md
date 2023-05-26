@@ -22,3 +22,5 @@ Here is a solution.
 
 You can check results for some group photos of G20 leaders in dir ./stock/tmp
 Looks like AffinityPropagation method gives the best result given that number of cluster is not known apriori.
+cluster.csv contains data for 389 faces found: paths to original photos and its hash256. 
+That allows to seek indexed photo by their hashes anywhere in different stores.
